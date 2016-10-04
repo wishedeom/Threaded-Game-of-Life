@@ -26,21 +26,6 @@ const GLuint window_height = 600;
 // Window
 GLFWwindow* window;
 
-// Shaders
-const GLchar* vertexShaderSource = "#version 330 core\n"
-	"layout (location = 0) in vec3 position;\n"
-	"void main()\n"
-	"{\n"
-	"gl_Position = vec4(position.x, position.y, position.z, 1.0);\n"
-	"}\0";
-
-const GLchar* fragmentShaderSource = "#version 330 core\n"
-	"out vec4 color;\n"
-	"void main()\n"
-	"{\n"
-	"color = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
-	"}\n\0";
-
 // Grid dimensions
 const int grid_width = 1024;
 const int grid_height = 768;
@@ -58,10 +43,9 @@ const int cols_per_thread = grid_width / threads_per_grid;
 
 int main()
 {
-	std::cout << read_file("vertex_shader.vs");
 	initialize_openGL();
 
-	GLuint shaderProgram = Shader("vertex_shader.vs", "fragment_shader.vs").id;
+	Shader shader_program("vertex_shader.vs", "fragment_shader.fs");
 
 
 	// Set up vertex data (and buffer(s)) and attribute pointers
@@ -121,7 +105,7 @@ int main()
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		// Draw our first triangle
-		glUseProgram(shaderProgram);
+		shader_program.use();
 		glBindVertexArray(VAO);
 		//glDrawArrays(GL_TRIANGLES, 0, 6);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);

@@ -2,18 +2,27 @@
 
 #include "utility.h"
 
+#include <iostream>
 #include <fstream>
 #include <string>
 #include <sstream>
 
 std::string read_file(const std::string& path)
 {
-	std::ifstream in(path);
-	std::string line;
-	std::stringstream ss;
-	while (std::getline(in, line))
+	std::ifstream file;
+	std::stringstream stream;
+
+	file.exceptions(std::ifstream::badbit);
+	try
 	{
-		ss << line << "\n";
+		file.open(path);
+		stream << file.rdbuf();
+		file.close();
 	}
-	return ss.str();
+	catch (std::ifstream::failure e)
+	{
+		std::cout << "ERROR: File " << path << " read failure." << std::endl;
+	}
+
+	return stream.str();
 }

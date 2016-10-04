@@ -1,14 +1,18 @@
 #include "stdafx.h"
-
 #include "Grid.h"
 
-Grid::Grid(const int& aWidth, const int& aHeight)
-	: width(aWidth), height(aHeight), area(aWidth * aHeight)
-{
-	_squares = std::vector<GridSquare>(area);
-}
+#include <algorithm>
 
-GridSquare & Grid::grid_square(const int& x, const int& y)
+#include "glm/glm.hpp"
+
+Grid::Grid(int aWidth, int aHeight)
+	: width(aWidth)
+	, height(aHeight)
+	, area(aWidth * aHeight)
+	, _squares(area)
+{}
+
+GridSquare & Grid::grid_square(int x, int y)
 {
 	if (x < 0 || x >= width || y < 0 || y >= height)
 		throw std::out_of_range("Trying to access a square outside the grid.");
@@ -16,12 +20,12 @@ GridSquare & Grid::grid_square(const int& x, const int& y)
 	return _squares[x + y * width];
 }
 
-bool& Grid::operator()(const int& x, const int& y)
+bool& Grid::operator()(int x, const int y)
 {
 	return grid_square(x, y).is_alive;
 }
 
-unsigned int Grid::live_neighbours(const int& x, const int& y)
+unsigned int Grid::live_neighbours(int x, int y)
 {
 	unsigned int count = 0u;
 
@@ -35,7 +39,7 @@ unsigned int Grid::live_neighbours(const int& x, const int& y)
 		if (y < height - 1)
 			count += grid_square(x - 1, y + 1).is_alive;
 	}
-
+		
 	if (y > 0)
 		count += grid_square(x, y - 1).is_alive;
 
@@ -58,13 +62,13 @@ unsigned int Grid::live_neighbours(const int& x, const int& y)
 	return count;
 }
 
-void Grid::update_is_alive(const int& x, const int& y)
+void Grid::update_is_alive(int x, int y)
 {
 	auto& square = grid_square(x, y);
 	square.is_alive = square.will_be_alive;
 }
 
-void Grid::update_will_be_alive(const int& x, const int& y)
+void Grid::update_will_be_alive(int x, int y)
 {
 	auto& square = grid_square(x, y);
 	const auto count = live_neighbours(x, y);
@@ -74,7 +78,7 @@ void Grid::update_will_be_alive(const int& x, const int& y)
 		|| (!square.is_alive && count == 2);
 }
 
-void Grid::update_is_alive_columns(const int& first, const int& last)
+void Grid::update_is_alive_columns(int first, int last)
 {
 	for (int x = first; x <= last; x++)
 	{
@@ -85,7 +89,7 @@ void Grid::update_is_alive_columns(const int& first, const int& last)
 	}
 }
 
-void Grid::update_will_be_alive_columns(const int& first, const int& last)
+void Grid::update_will_be_alive_columns(int first, int last)
 {
 	for (int x = first; x <= last; x++)
 	{
@@ -94,4 +98,21 @@ void Grid::update_will_be_alive_columns(const int& first, const int& last)
 			update_will_be_alive(x, y);
 		}
 	}
+}
+
+std::vector<glm::vec3> grid_vertices(int width, int height, float border_thickness, glm::vec4 colour)
+{
+	const auto max_dim = std::max(width, height);
+	const auto min_dim = std::min(width, height);
+
+	float lwidth;
+	float lheight;
+
+	if (width >= height)
+	{
+		lwidth = 2.0f * (1.0f - border_thickness);
+		lheight = lwidth * height / width;
+	}
+
+	return std::vector<glm::vec3>();
 }
