@@ -2,15 +2,35 @@
 #include "Grid.h"
 
 #include <algorithm>
+#include <cstdlib>
 
+#include <GL/glew.h>
+#include <GLFW/glfw3.h>
 #include "glm/glm.hpp"
 
-Grid::Grid(int aWidth, int aHeight)
-	: width(aWidth)
-	, height(aHeight)
-	, area(aWidth * aHeight)
+Grid::Grid(int width, int height)
+	: width(width)
+	, height(height)
+	, area(width * height)
+	, vertices(compute_vertices())
 	, _squares(area)
-{}
+{
+	glGenVertexArrays(1, &_vao_id);
+	glGenBuffers(1, &_vbo_id);
+	glGenBuffers(1, &_ebo_id);
+
+	glBindVertexArray(_vao_id);
+	
+	glBindBuffer(GL_ARRAY_BUFFER, _vbo_id);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices[0]) * vertices.size(), vertices.data(), GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+	glEnableVertexAttribArray(0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	glBindVertexArray(0);
+}
 
 GridSquare & Grid::grid_square(int x, int y)
 {
@@ -100,19 +120,119 @@ void Grid::update_will_be_alive_columns(int first, int last)
 	}
 }
 
-std::vector<glm::vec3> grid_vertices(int width, int height, float border_thickness, glm::vec4 colour)
+std::vector<glm::vec3> Grid::compute_vertices()
 {
-	const auto max_dim = std::max(width, height);
-	const auto min_dim = std::min(width, height);
-
-	float lwidth;
-	float lheight;
+	float x0;
+	float y0;
+	float grid_width;
 
 	if (width >= height)
 	{
-		lwidth = 2.0f * (1.0f - border_thickness);
-		lheight = lwidth * height / width;
+		grid_width = 2.0f;
+		x0 = -1.0f;
+		y0 = grid_width * height / width / 2;
+	}
+	else
+	{
+		grid_width = 2.0f * width / height;
+		x0 = -grid_width / 2;
+		y0 = 1.0f;
 	}
 
-	return std::vector<glm::vec3>();
+	const auto side_length = grid_width / width;
+
+	std::vector<glm::vec3> vertices;
+	for (int y = 0; y <= height; y++)
+	{
+		for (int x = 0; x <= width; x++)
+		{
+			vertices.push_back(glm::vec3(x0 + x * side_length, y0 - y * side_length, 0.0f));
+		}
+	}
+
+	return vertices;
+}
+
+std::vector<int> Grid::compute_indices()
+{
+	std::vector<int> indices;
+	for (int x = 0; x < width; x++)
+	{
+		for (int y = 0; y < height; y++)
+		{
+			if (grid_square(x, y).is_alive)
+			{
+				const auto iw = width + 1;		// Number of indices per row
+				
+				const auto ul = x + iw * y;		// Upper left
+				const auto ur = ul + 1;			// Upper right
+				const auto ll = ul + iw;		// Lower left
+				const auto lr = ll + 1;			// Lower right
+				
+				indices.push_back(ul);
+				indices.push_back(ur);
+				indices.push_back(ll);
+				indices.push_back(lr);
+				indices.push_back(ll);
+				indices.push_back(ur);
+			}
+		}
+	}
+
+	_up_to_date = true;
+
+	return indices;
+}
+
+std::vector<int> Grid::indices()
+{
+	if (!_up_to_date)
+	{
+		_indices = compute_indices();
+	}
+
+	return _indices;
+}
+
+void Grid::populate_random()
+{
+	_up_to_date = false;
+	for (auto& square : _squares)
+	{
+		square.is_alive = std::rand() % 2 == 0;
+	}
+}
+
+
+void Grid::populate_disk(float radius)
+{
+	for (int x = 0; x < width; x++)
+	{
+		for (int y = 0; y < height; y++)
+		{
+			const auto h = x - width / 2;
+			const auto k = y - height / 2;
+			if (h * h + k * k <= radius * radius)
+			{
+				grid_square(x, y).is_alive = true;
+			}
+		}
+	}
+}
+
+void Grid::update_ebo()
+{
+	glBindVertexArray(_vao_id);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _ebo_id);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices()[0]) * indices().size(), indices().data(), GL_STATIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	glBindVertexArray(0);
+}
+
+void Grid::bind_vao()
+{
+	update_ebo();
+	glBindVertexArray(_vao_id);
 }
