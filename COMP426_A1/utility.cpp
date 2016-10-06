@@ -1,11 +1,19 @@
 #include "stdafx.h"
-
 #include "utility.h"
 
+#include <cstdlib>
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <sstream>
+
+#include "glm/glm.hpp"
+
+glm::vec4 rand_colour()
+{
+	const auto r = []() -> float { return static_cast<float>(std::rand()) / RAND_MAX; };
+	return { r(), r(), r(), 1.0f };
+}
 
 std::string read_file(const std::string& path)
 {

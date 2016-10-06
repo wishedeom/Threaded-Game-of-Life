@@ -9,6 +9,8 @@
 #include <vector>
 
 #include <GL/glew.h>
+#include "glm/glm.hpp"
+#include "glm/gtc/type_ptr.hpp"
 
 #include "utility.h"
 
@@ -17,11 +19,16 @@ GLuint create_shader_program(const std::string& vs_path, const std::string& fs_p
 
 Shader::Shader(const std::string& vs_path, const std::string& fs_path)
 	: id(create_shader_program(vs_path, fs_path))
+	, colour_loc(glGetUniformLocation(id, "u_colour"))
 {}
 
-void Shader::use()
+void Shader::use(const glm::vec4 colour) const
 {
 	glUseProgram(id);
+	if (colour_loc != -1)
+	{
+		glUniform4fv(colour_loc, 1, glm::value_ptr(colour));
+	}
 }
 
 GLuint create_shader_program(const std::string& vs_path, const std::string& fs_path)

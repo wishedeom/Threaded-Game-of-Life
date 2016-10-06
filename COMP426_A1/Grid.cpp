@@ -8,10 +8,13 @@
 #include <GLFW/glfw3.h>
 #include "glm/glm.hpp"
 
-Grid::Grid(int width, int height)
+#include "Shader.h"
+
+Grid::Grid(const int width, const int height, glm::vec4 colour)
 	: width(width)
 	, height(height)
 	, area(width * height)
+	, colour(colour)
 	, vertices(compute_vertices())
 	, _squares(area)
 {
@@ -30,17 +33,34 @@ Grid::Grid(int width, int height)
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	glBindVertexArray(0);
+
+	update_ebo();
 }
 
-GridSquare & Grid::grid_square(int x, int y)
-{
-	if (x < 0 || x >= width || y < 0 || y >= height)
-		throw std::out_of_range("Trying to access a square outside the grid.");
 
+Grid::~Grid()
+{
+	glDeleteVertexArrays(1, &_vao_id);
+	glDeleteBuffers(1, &_vbo_id);
+	glDeleteBuffers(1, &_ebo_id);
+}
+
+GridSquare& Grid::grid_square(int x, int y)
+{
 	return _squares[x + y * width];
 }
 
-bool& Grid::operator()(int x, const int y)
+GridSquare& Grid::grid_square(int2 coords)
+{
+	return grid_square(coords.x, coords.y);
+}
+
+int2 Grid::grid_coords(int idx) const
+{
+	return { idx % width, idx / width };
+}
+
+bool& Grid::operator()(const int x, const int y)
 {
 	return grid_square(x, y).is_alive;
 }
@@ -82,43 +102,12 @@ unsigned int Grid::live_neighbours(int x, int y)
 	return count;
 }
 
-void Grid::update_is_alive(int x, int y)
+unsigned int Grid::live_neighbours(int idx)
 {
-	auto& square = grid_square(x, y);
-	square.is_alive = square.will_be_alive;
+	const auto coords = grid_coords(idx);
+	return live_neighbours(coords.x, coords.y);
 }
 
-void Grid::update_will_be_alive(int x, int y)
-{
-	auto& square = grid_square(x, y);
-	const auto count = live_neighbours(x, y);
-
-	square.will_be_alive
-		= (square.is_alive && (count == 2 || count == 3))
-		|| (!square.is_alive && count == 2);
-}
-
-void Grid::update_is_alive_columns(int first, int last)
-{
-	for (int x = first; x <= last; x++)
-	{
-		for (int y = 0; y < height; y++)
-		{
-			update_is_alive(x, y);
-		}
-	}
-}
-
-void Grid::update_will_be_alive_columns(int first, int last)
-{
-	for (int x = first; x <= last; x++)
-	{
-		for (int y = 0; y < height; y++)
-		{
-			update_will_be_alive(x, y);
-		}
-	}
-}
 
 std::vector<glm::vec3> Grid::compute_vertices()
 {
@@ -179,9 +168,12 @@ std::vector<int> Grid::compute_indices()
 		}
 	}
 
-	_up_to_date = true;
-
 	return indices;
+}
+
+void Grid::update_indices()
+{
+	_indices = compute_indices();
 }
 
 std::vector<int> Grid::indices()
@@ -201,23 +193,25 @@ void Grid::populate_random()
 	{
 		square.is_alive = std::rand() % 2 == 0;
 	}
+	update_ebo();
 }
 
-
-void Grid::populate_disk(float radius)
+void Grid::populate_disk(float radius, float h, float k)
 {
+	_up_to_date = false;
 	for (int x = 0; x < width; x++)
 	{
 		for (int y = 0; y < height; y++)
 		{
-			const auto h = x - width / 2;
-			const auto k = y - height / 2;
-			if (h * h + k * k <= radius * radius)
+			const auto dx = x - h;
+			const auto dy = y - k;
+			if (dx * dx + dy * dy <= radius * radius)
 			{
 				grid_square(x, y).is_alive = true;
 			}
 		}
 	}
+	update_ebo();
 }
 
 void Grid::update_ebo()
@@ -231,8 +225,40 @@ void Grid::update_ebo()
 	glBindVertexArray(0);
 }
 
-void Grid::bind_vao()
+
+void Grid::draw(const Shader& shader) const
 {
-	update_ebo();
+	shader.use(colour);
 	glBindVertexArray(_vao_id);
+	glDrawElements(GL_TRIANGLES, _indices.size(), GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+}
+
+void Grid::update()
+{
+	update_will_be_alive();
+	update_is_alive();
+	update_indices();
+	update_ebo();
+}
+
+void Grid::update_is_alive()
+{
+	for (size_t i = 0; i < _squares.size(); i++)
+	{
+		auto& square = _squares[i];
+		square.is_alive = square.will_be_alive;
+	}
+}
+
+void Grid::update_will_be_alive()
+{
+	for (size_t i = 0; i < _squares.size(); i++)
+	{
+		auto& square = _squares[i];
+		const auto count = live_neighbours(i);
+		square.will_be_alive
+			= (square.is_alive && (count == 2 || count == 3))
+			|| (!square.is_alive && count == 2);
+	}
 }
