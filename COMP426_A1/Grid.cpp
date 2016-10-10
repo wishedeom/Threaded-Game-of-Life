@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <thread>
+#include <vector>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -10,6 +12,11 @@
 
 #include "Shader.h"
 
+// Degree of multiprogramming
+const size_t num_threads = 10;
+
+
+// Constructs a grid and prepares all drawing buffers
 Grid::Grid(const int width, const int height, glm::vec4 colour)
 	: width(width)
 	, height(height)
@@ -38,6 +45,7 @@ Grid::Grid(const int width, const int height, glm::vec4 colour)
 }
 
 
+// Cleans up buffers
 Grid::~Grid()
 {
 	glDeleteVertexArrays(1, &_vao_id);
@@ -45,26 +53,29 @@ Grid::~Grid()
 	glDeleteBuffers(1, &_ebo_id);
 }
 
+
+// Gets a grid square from coordinates
 GridSquare& Grid::grid_square(int x, int y)
 {
 	return _squares[x + y * width];
 }
 
+
+// Gets a grid square from coordinates
 GridSquare& Grid::grid_square(int2 coords)
 {
 	return grid_square(coords.x, coords.y);
 }
 
+
+// Gets grid coordinates from a vector index
 int2 Grid::grid_coords(int idx) const
 {
 	return { idx % width, idx / width };
 }
 
-bool& Grid::operator()(const int x, const int y)
-{
-	return grid_square(x, y).is_alive;
-}
 
+// Returns the number of live neighbours of a grid cell
 unsigned int Grid::live_neighbours(int x, int y)
 {
 	unsigned int count = 0u;
@@ -102,6 +113,8 @@ unsigned int Grid::live_neighbours(int x, int y)
 	return count;
 }
 
+
+// Returns the number of live neighbours of a grid cell
 unsigned int Grid::live_neighbours(int idx)
 {
 	const auto coords = grid_coords(idx);
@@ -109,6 +122,7 @@ unsigned int Grid::live_neighbours(int idx)
 }
 
 
+// Computes grid vertices from width and height
 std::vector<glm::vec3> Grid::compute_vertices()
 {
 	float x0;
@@ -128,20 +142,22 @@ std::vector<glm::vec3> Grid::compute_vertices()
 		y0 = 1.0f;
 	}
 
-	const auto side_length = grid_width / width;
+	_side_length = grid_width / width;
 
 	std::vector<glm::vec3> vertices;
 	for (int y = 0; y <= height; y++)
 	{
 		for (int x = 0; x <= width; x++)
 		{
-			vertices.push_back(glm::vec3(x0 + x * side_length, y0 - y * side_length, 0.0f));
+			vertices.push_back(glm::vec3(x0 + x * _side_length, y0 - y * _side_length, 0.0f));
 		}
 	}
 
 	return vertices;
 }
 
+
+// Computes drawing indices
 std::vector<int> Grid::compute_indices()
 {
 	std::vector<int> indices;
@@ -171,34 +187,27 @@ std::vector<int> Grid::compute_indices()
 	return indices;
 }
 
+
+// Caches drawing indices
 void Grid::update_indices()
 {
 	_indices = compute_indices();
 }
 
-std::vector<int> Grid::indices()
-{
-	if (!_up_to_date)
-	{
-		_indices = compute_indices();
-	}
 
-	return _indices;
-}
-
+// Sets each cell alive or dead with a 0.5 probability
 void Grid::populate_random()
 {
-	_up_to_date = false;
 	for (auto& square : _squares)
 	{
 		square.is_alive = std::rand() % 2 == 0;
 	}
-	update_ebo();
 }
 
+
+// Sets cells alive in a disk with a specified centre and radius
 void Grid::populate_disk(float radius, float h, float k)
 {
-	_up_to_date = false;
 	for (int x = 0; x < width; x++)
 	{
 		for (int y = 0; y < height; y++)
@@ -211,21 +220,23 @@ void Grid::populate_disk(float radius, float h, float k)
 			}
 		}
 	}
-	update_ebo();
 }
 
+
+// Updates the index buffer, for use after the indices have been changed
 void Grid::update_ebo()
 {
 	glBindVertexArray(_vao_id);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, _ebo_id);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices()[0]) * indices().size(), indices().data(), GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(_indices[0]) * _indices.size(), _indices.data(), GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 	glBindVertexArray(0);
 }
 
 
+// Draw the grid with the specified shader
 void Grid::draw(const Shader& shader) const
 {
 	shader.use(colour);
@@ -234,6 +245,8 @@ void Grid::draw(const Shader& shader) const
 	glBindVertexArray(0);
 }
 
+
+// Update the grid according to the rules
 void Grid::update()
 {
 	update_will_be_alive();
@@ -242,23 +255,74 @@ void Grid::update()
 	update_ebo();
 }
 
+
+// Get world coordinates if a square from a vector index
+glm::vec2 Grid::square_coords(int idx) const
+{
+	const auto coords = grid_coords(idx);
+	return{ (coords.x + 0.5f) * _side_length, (coords.y + 0.5f) * _side_length };
+}
+
+
+// Update each cell's status for the current turn
 void Grid::update_is_alive()
 {
-	for (size_t i = 0; i < _squares.size(); i++)
+	_alive_squares.clear();
+	split_on_threads(&Grid::update_is_alive_indices);
+}
+
+
+// Update cells within the specified indices
+void Grid::update_is_alive_indices(size_t begin, size_t end)
+{
+	for (size_t i = begin; i < end; i++)
 	{
 		auto& square = _squares[i];
-		square.is_alive = square.will_be_alive;
+		if (square.is_alive = square.will_be_alive)	// Intentional assignment
+		{
+			_alive_squares.emplace_back(square_coords(i));
+		}
 	}
 }
 
+
+// Update each cell's status for the next turn based on the number of live neighbours
 void Grid::update_will_be_alive()
 {
-	for (size_t i = 0; i < _squares.size(); i++)
+	split_on_threads(&Grid::update_will_be_alive_indices);
+}
+
+
+// Update cells within the specified indices
+void Grid::update_will_be_alive_indices(size_t begin, size_t end)
+{
+	for (size_t i = begin; i < end; i++)
 	{
 		auto& square = _squares[i];
 		const auto count = live_neighbours(i);
 		square.will_be_alive
 			= (square.is_alive && (count == 2 || count == 3))
 			|| (!square.is_alive && count == 2);
+	}
+}
+
+
+// Execute one of the two update functions by splitting all vector indices among some number of threadss
+void Grid::split_on_threads(void(Grid::*f)(size_t, size_t))
+{
+	std::vector<std::thread> threads;
+	auto prev_begin = 0;
+	for (size_t i = 0; i < num_threads; i++)
+	{
+		const auto size = _squares.size();
+		const auto n = size / num_threads + (i == 0 ? size % num_threads : 0);
+		const auto end = prev_begin + n;
+		threads.push_back(std::thread(f, this, prev_begin, end));
+		prev_begin = end;
+	}
+
+	for (auto& thread : threads)
+	{
+		thread.join();
 	}
 }

@@ -5,6 +5,7 @@
 #include <GL/glew.h>
 #include "glm/glm.hpp"
 
+// Encapsulates an OpenGL shader program
 class Shader
 {
 public:

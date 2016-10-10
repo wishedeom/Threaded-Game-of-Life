@@ -14,14 +14,20 @@
 
 #include "utility.h"
 
+
+// Function prototypes
 GLuint create_shader(const std::string& path, const GLenum shader_type);
 GLuint create_shader_program(const std::string& vs_path, const std::string& fs_path);
 
+
+// Creates a shader
 Shader::Shader(const std::string& vs_path, const std::string& fs_path)
 	: id(create_shader_program(vs_path, fs_path))
 	, colour_loc(glGetUniformLocation(id, "u_colour"))
 {}
 
+
+// Binds the shader for use
 void Shader::use(const glm::vec4 colour) const
 {
 	glUseProgram(id);
@@ -31,6 +37,8 @@ void Shader::use(const glm::vec4 colour) const
 	}
 }
 
+
+// Ceates a shader and returns its id
 GLuint create_shader_program(const std::string& vs_path, const std::string& fs_path)
 {
 	const auto shader_program_id = glCreateProgram();
@@ -51,6 +59,8 @@ GLuint create_shader_program(const std::string& vs_path, const std::string& fs_p
 	return shader_program_id;
 }
 
+
+// Creates a vertex or fragment shader and returns its id
 GLuint create_shader(const std::string& source_string, const GLenum shader_type)
 {
 	const auto source = source_string.c_str();

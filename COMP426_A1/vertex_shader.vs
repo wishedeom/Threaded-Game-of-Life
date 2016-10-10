@@ -1,5 +1,7 @@
 #version 330 core
 
+// Just passes on vertex position
+
 layout (location = 0) in vec3 position;
 
 void main()

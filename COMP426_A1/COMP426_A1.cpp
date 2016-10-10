@@ -1,5 +1,23 @@
+/*
+*
+*	COMP 426 - Multicore Programming
+*	Assignment 1
+*	Michael deom, 29549641
+*	
+*	The program prompots the user for a number of species to simulate, then randomly populates a number of grids to play out Conway's
+*	Game of Life.
+*
+*/
+
+
+//	-----------------------------------
+//				Includes
+//	-----------------------------------
+
+// Precompiled Headers
 #include "stdafx.h"
 
+// Standard library
 #include <array>
 #include <chrono>
 #include <cstdlib>
@@ -8,19 +26,31 @@
 #include <string>
 #include <thread>
 
+// OpenGL
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+// User-defined
 #include "Grid.h"
 #include "GridSquare.h"
 #include "Shader.h"
 #include "utility.h"
 
-#define GLEW_STATIC
 
-// Function prototypes
+//	-----------------------------------
+//		Function Prototypes
+//	-----------------------------------
+
 void initialize_openGL();
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
+
+
+//	-----------------------------------
+//			Global Constants
+//	-----------------------------------
+
+// Link to GLEW static 
+#define GLEW_STATIC
 
 // Window dimensions
 const GLuint window_width = 1024;
@@ -30,8 +60,8 @@ const GLuint window_height = 768;
 GLFWwindow* window;
 
 // Grid dimensions
-const int grid_width = 100;	// 1024
-const int grid_height = 100;	// 768
+const int grid_width = 1024;
+const int grid_height = 768;
 
 // Limits on number of species
 const size_t min_species = 5;
@@ -41,23 +71,33 @@ const size_t max_species = 10;
 const double update_rate = 30.0;
 const std::chrono::milliseconds update_time(static_cast<int>(1000 / update_rate));
 
+
+//	-----------------------------------
+//				Main Program
+//	-----------------------------------
+
 int main()
 {
+	// Prompt user for number of species
 	std::cout << "How many species? (" << min_species << " - " << max_species << ")" << std::endl;
-	size_t num_species;
-	std::cin >> num_species;
-	if (!(min_species <= num_species && num_species <= max_species))
+	
+	size_t num_species = 1;
+	while (true)
 	{
+		std::cin >> num_species;
+		if (min_species <= num_species && num_species <= max_species)
+			break;
 		std::cout << "Can you read?" << std::endl;
-		exit(1);
 	}
 
+	// Seed random number generator
 	std::srand(static_cast<unsigned int>(std::time(0)));
 
 	initialize_openGL();
 
 	Shader shader("vertex_shader.vs", "fragment_shader.fs");
 
+	// Prepare sepcied grids
 	std::vector<Grid> grids;
 	for (size_t i = 0; i < num_species; i++)
 	{
@@ -69,8 +109,10 @@ int main()
 		grid.populate_disk(10, std::rand() % grid_width, std::rand() % grid_height);
 	}
 
+	// Main program loop
 	while (!glfwWindowShouldClose(window))
 	{
+		// Timer to control update rates
 		const auto start = std::chrono::steady_clock::now();
 		glfwPollEvents();
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -86,6 +128,8 @@ int main()
 		{
 			grid.update();
 		}
+
+		// Pause until 1/30 s has passed
 		while (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start) < update_time) {}
 	}
 	glfwTerminate();
@@ -93,6 +137,7 @@ int main()
 }
 
 
+// Prepare OpenGL
 void initialize_openGL()
 {
 	glfwInit();
@@ -118,6 +163,7 @@ void initialize_openGL()
 }
 
 
+// Sets excape key to close window and terminate program
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode)
 {
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
